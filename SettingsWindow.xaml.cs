@@ -9,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using Microsoft.Win32;
+using System.Diagnostics;
 using 每日一句.Models;
 using 每日一句.Services;
 
@@ -589,13 +590,30 @@ public partial class SettingsWindow : Window
         // XAML 加载期间，第一个导航项 IsChecked="True" 会在 Section 元素
         // 实例化之前触发 Checked 事件，此时字段为 null，必须跳过。
         if (SecAppearance is null || SecInteraction is null ||
-            SecRefresh is null || SecSystem is null)
+            SecRefresh is null || SecSystem is null || SecAbout is null)
             return;
 
         SecAppearance.Visibility = key == "appearance" ? Visibility.Visible : Visibility.Collapsed;
         SecInteraction.Visibility = key == "interaction" ? Visibility.Visible : Visibility.Collapsed;
         SecRefresh.Visibility = key == "refresh" ? Visibility.Visible : Visibility.Collapsed;
         SecSystem.Visibility = key == "system" ? Visibility.Visible : Visibility.Collapsed;
+        SecAbout.Visibility = key == "about" ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ==================== 关于页：超链接 ====================
+
+    /// <summary>关于页里的 GitHub / 博客链接：用系统默认浏览器打开。</summary>
+    private void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+            e.Handled = true;
+        }
+        catch
+        {
+            // 浏览器不可用等异常静默忽略，不抛出
+        }
     }
 
     // ==================== Toast ====================

@@ -1,7 +1,7 @@
 <Window x:Class="每日一句.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="每日一句 · 设置"
+        Title="拾句 · 设置"
         Width="1000" Height="800"
         MinWidth="900" MinHeight="640"
         WindowStartupLocation="CenterScreen"
@@ -516,7 +516,7 @@
                           Data="M8 10c0-2 1.6-3 3.2-3v2c-.8 0-1.2.4-1.2 1.2H11V15H8v-5zm6 0c0-2 1.6-3 3.2-3v2c-.8 0-1.2.4-1.2 1.2H17V15h-3v-5z"
                           Fill="White"/>
                 </Border>
-                <TextBlock Text="每日一句 · 设置" FontSize="14" FontWeight="SemiBold"
+                <TextBlock Text="拾句 · 设置" FontSize="14" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextBrush}" Margin="10,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
@@ -594,6 +594,16 @@
                                   Data="M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM9 9h6v6H9z"
                                   Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
                             <TextBlock Text="系统" Margin="12,0,0,0" FontSize="14" VerticalAlignment="Center"
+                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource NavItemStyle}" GroupName="NavGroup"
+                                 Tag="about" Checked="NavItem_Checked">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Width="20" Height="20" Stretch="Uniform" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  Data="M12 8v.01M11 12h1v4h-1M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                            <TextBlock Text="关于" Margin="12,0,0,0" FontSize="14" VerticalAlignment="Center"
                                        Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
                         </StackPanel>
                     </RadioButton>
@@ -935,6 +945,143 @@
                                     </Border>
 
                                 </StackPanel>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- ========== 关于 ========== -->
+                        <Grid x:Name="SecAbout" Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock Text="关于 拾句" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource TextBrush}"/>
+                                <TextBlock Text="拾句 · Daily Quote —— 桌面浮窗每日金句小工具" Style="{StaticResource HintStyle}" Margin="0,4,0,0"/>
+
+                                <StackPanel Margin="0,16,0,0">
+                                    <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,14">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="版本" Style="{StaticResource LabelStyle}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="1.0.0" FontSize="14" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,14">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="简介" Style="{StaticResource LabelStyle}" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                                            <TextBlock Grid.Column="1" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                                       TextWrapping="Wrap" LineHeight="22">
+                                                拾句是一个电脑桌面小部件:展示一句英文金句和对应的中文翻译，还带打字机动画效果。支持开机自动启动、随机换一句、手动刷新，也能一键复制到剪贴板。
+                                            </TextBlock>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,14">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="技术栈" Style="{StaticResource LabelStyle}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text=".NET 9 + WPF + C#" FontSize="14" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,14">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="数据来源" Style="{StaticResource LabelStyle}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" FontSize="14" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center">
+                                                扇贝单词<Run FontSize="12" Foreground="{DynamicResource HintBrush}">（内容版权归原作者及扇贝所有）</Run>
+                                            </TextBlock>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,14">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="开发者" Style="{StaticResource LabelStyle}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="莫莫莫" FontSize="14" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,14">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="项目仓库" Style="{StaticResource LabelStyle}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" FontSize="14" VerticalAlignment="Center">
+                                                <Hyperlink NavigateUri="https://github.com/moshuxv/Daily-Quote"
+                                                           RequestNavigate="Hyperlink_RequestNavigate"
+                                                           Foreground="{DynamicResource AccentBrush}">
+                                                    https://github.com/moshuxv/Daily-Quote
+                                                </Hyperlink>
+                                            </TextBlock>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,14">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="博客" Style="{StaticResource LabelStyle}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" FontSize="14" VerticalAlignment="Center">
+                                                <Hyperlink NavigateUri="https://msx.ink"
+                                                           RequestNavigate="Hyperlink_RequestNavigate"
+                                                           Foreground="{DynamicResource AccentBrush}">
+                                                    https://msx.ink
+                                                </Hyperlink>
+                                            </TextBlock>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,14">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="许可" Style="{StaticResource LabelStyle}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="个人学习作品，未声明第三方开源许可" FontSize="14" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,14">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="版权" Style="{StaticResource LabelStyle}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="© 2026 莫莫莫" FontSize="14" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+
+                                <Border Background="{DynamicResource SidebarBrush}" CornerRadius="10" Padding="18,14" Margin="0,20,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="免责声明" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6"/>
+                                        <TextBlock FontSize="12" Foreground="{DynamicResource Text2Brush}" TextWrapping="Wrap" LineHeight="20">
+                                            本软件仅作个人学习交流使用，禁止商用。词库数据源自扇贝单词，版权归扇贝及原权利人所有，本项目与扇贝无任何授权、合作关系。<LineBreak/>
+                                            所有下载者<Bold>仅限 24 小时内学习试用，请在 24 小时内自行删除本软件</Bold>。逾期继续留存、转发、使用产生的全部法律风险由使用者自行承担。
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+
                             </StackPanel>
                         </Grid>
 

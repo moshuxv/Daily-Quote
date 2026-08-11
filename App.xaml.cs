@@ -158,7 +158,7 @@ public partial class App : Application
             _notifyIcon = new WinForms.NotifyIcon
             {
                 Icon = icon,
-                Text = "每日一句",
+                Text = "拾句",
                 Visible = true
             };
 
