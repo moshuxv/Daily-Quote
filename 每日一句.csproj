@@ -8,6 +8,10 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Assets/app.ico</ApplicationIcon>
+    <!-- 产品改名「拾句」：仅改 AssemblyName（影响 exe/程序集名/pack URI/文件属性），
+         显式保留 RootNamespace=每日一句，避免 namespace 与 XAML x:Class 全部失效 -->
+    <AssemblyName>拾句</AssemblyName>
+    <RootNamespace>每日一句</RootNamespace>
   </PropertyGroup>
 
   <!--

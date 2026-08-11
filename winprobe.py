@@ -20,7 +20,7 @@ class RECT(ctypes.Structure):
                 ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
 
 def find_pid():
-    out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq 每日一句.exe", "/FO", "CSV"],
+    out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq 拾句.exe", "/FO", "CSV"],
                          capture_output=True, text=True, encoding='gbk', errors='replace').stdout
     for line in out.splitlines():
         parts = line.strip('"').split('","')

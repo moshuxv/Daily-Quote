@@ -53,7 +53,7 @@ for h in tops:
 
 # 对每个 desktop-like 窗口枚举子窗口（一层），找我们的进程窗口
 def our_pid():
-    out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq 每日一句.exe", "/FO", "CSV"],
+    out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq 拾句.exe", "/FO", "CSV"],
                          capture_output=True, text=True, encoding='gbk', errors='replace').stdout
     for line in out.splitlines():
         p = line.strip('"').split('","')

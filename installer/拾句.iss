@@ -1,8 +1,8 @@
-; 每日一句 安装脚本（产物与脚本均位于项目内 installer\）
-#define MyAppName "每日一句"
+; 拾句 安装脚本（产物与脚本均位于项目内 installer\）
+#define MyAppName "拾句"
 #define MyAppVersion "1.0.0"
-#define MyPublisher "每日一句"
-; 发布目录：相对本脚本上一级的 publish\（即 每日一句\publish\）
+#define MyPublisher "拾句"
+; 发布目录：相对本脚本上一级的 publish\（即 拾句\publish\）
 #define SourceDir "..\publish"
 
 [Setup]
@@ -31,7 +31,7 @@ WizardStyle=modern
 
 [Files]
 ; 只打包根目录真正需要的文件（单文件 exe 已内置 .NET 运行时，无需 win-x64/ 等框架依赖副本）
-Source: "{#SourceDir}\每日一句.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\拾句.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\corpus.json"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -44,4 +44,4 @@ Name: desktopicon; Description: "创建桌面快捷方式"; GroupDescription: "�
 
 [Registry]
 ; 开机自启（HKCU Run 键，卸载时自动清理）
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "每日一句"; ValueData: """{app}\{#MyAppName}.exe"""; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "拾句"; ValueData: """{app}\{#MyAppName}.exe"""; Flags: uninsdeletevalue

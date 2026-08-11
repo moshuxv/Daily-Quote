@@ -63,7 +63,7 @@ if progman:
 
 # 3) 枚举所有顶层窗口里属于我们进程的（含子窗口）——查 widget 是否在某 WorkerW 下
 def our_pid():
-    out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq 每日一句.exe", "/FO", "CSV"],
+    out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq 拾句.exe", "/FO", "CSV"],
                          capture_output=True, text=True, encoding='gbk', errors='replace').stdout
     for line in out.splitlines():
         p = line.strip('"').split('","')

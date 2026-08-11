@@ -1,4 +1,4 @@
-# 每日一句（Daily Quote）
+# 拾句（Daily Quote）
 
 > 桌面浮窗小工具：在桌面壁纸层显示每日英文金句 + 中文翻译 + 作者，支持打字机动画、透明度/字号/颜色自定义、开机自启、位置记忆、随机/刷新、复制到剪贴板。
 >
@@ -63,8 +63,8 @@
 │   └── corpus.json             # 内置种子语料（随发布落到输出根目录，首次运行灌入 data.json）
 │
 ├── installer/
-│   └── 每日一句.iss            # Inno Setup 安装脚本（产物 setup.exe 不入库）
-│   └── 每日一句_setup.exe       # 编译产物（被 .gitignore 忽略）
+│   └── 拾句.iss            # Inno Setup 安装脚本（产物 setup.exe 不入库）
+│   └── 拾句_setup.exe       # 编译产物（被 .gitignore 忽略）
 │
 ├── publish/                   # dotnet publish 输出（被 .gitignore 忽略，可重建）
 ├── .tools/InnoSetup/          # Inno Setup 编译器（被 .gitignore 忽略，不入库）
@@ -76,7 +76,7 @@
 ```
 
 > **不入库的文件**（见 `.gitignore`）：`bin/`、`obj/`、`.tools/`、`.workbuddy/`、`publish/`、`installer/*.exe`。
-> 也就是说 **git 仓库只保留源码 + `每日一句.iss` 脚本 + 文档**，编译器与发布产物本地生成即可。
+> 也就是说 **git 仓库只保留源码 + `拾句.iss` 脚本 + 文档**，编译器与发布产物本地生成即可。
 
 ---
 
@@ -91,8 +91,8 @@ dotnet run --project .      # 直接运行（F5 亦可）
 
 ### 3.2 调试技巧
 - 程序**无主窗口**，入口是托盘图标（通知区）。任务栏看不到主窗口是正常的（浮窗 `ShowInTaskbar=false`，挂在桌面层）。
-- 崩溃会写日志到 `%APPDATA%\每日一句\crash.log`（含 StackTrace）。功能异常（被 catch 的）写同一文件前缀 `[WARN]`。
-- 数据目录：`%APPDATA%\每日一句\`（含 `data.json` 语料、`settings.json` 设置）。
+- 崩溃会写日志到 `%APPDATA%\拾句\crash.log`（含 StackTrace）。功能异常（被 catch 的）写同一文件前缀 `[WARN]`。
+- 数据目录：`%APPDATA%\拾句\`（含 `data.json` 语料、`settings.json` 设置）。
 - 本机已有运行进程会锁住 `bin`，导致 `dotnet build` 复制 exe 失败（MSB3027）。**先退出旧进程再构建**，或 `dotnet build -o <临时目录>` 绕开。
 
 ---
@@ -110,15 +110,15 @@ dotnet publish -c Release -r win-x64 `
   -p:SelfContained=true `
   -o publish
 ```
-- 产物：`publish\每日一句.exe`（**约 155MB**，已内置 .NET 9 运行时，换没装 .NET 的机器也能跑）。
+- 产物：`publish\拾句.exe`（**约 155MB**，已内置 .NET 9 运行时，换没装 .NET 的机器也能跑）。
 - 同目录还会带 5 个 WPF 原生 DLL（`wpfgfx_cor3.dll` 等，须与 exe 同目录）和 `corpus.json`。
 
 ### 4.2 第二步：用 Inno Setup 压缩成安装包
 ```bash
-.tools\InnoSetup\ISCC.exe installer\每日一句.iss
+.tools\InnoSetup\ISCC.exe installer\拾句.iss
 ```
-- 输出：`installer\每日一句_setup.exe`（**约 48MB**，LZMA 压缩）。
-- 安装特性：可选安装目录（默认 `%LOCALAPPDATA%\Programs\每日一句`，选 `Program Files` 会弹 UAC）、桌面快捷方式、**开机自启（HKCU Run 键）**、标准卸载程序。
+- 输出：`installer\拾句_setup.exe`（**约 48MB**，LZMA 压缩）。
+- 安装特性：可选安装目录（默认 `%LOCALAPPDATA%\Programs\拾句`，选 `Program Files` 会弹 UAC）、桌面快捷方式、**开机自启（HKCU Run 键）**、标准卸载程序。
 
 ### 4.3 体积为什么是 48MB（而不是 96MB 或 1MB）
 | 情形 | 体积 | 原因 |
@@ -131,13 +131,13 @@ dotnet publish -c Release -r win-x64 `
 
 ```ini
 [Files]
-Source: "{#SourceDir}\每日一句.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\拾句.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\*.dll";        DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\corpus.json";  DestDir: "{app}"; Flags: ignoreversion
 ```
 > 注意 `*.dll` 用通配是安全的（根目录只有那 5 个 WPF 原生 DLL）；**绝不能**通配 `*` 把 `win-x64\` 等子目录收进来。
 
-### 4.4 安装脚本要点（`installer\每日一句.iss`）
+### 4.4 安装脚本要点（`installer\拾句.iss`）
 - `SourceDir=..\publish`：发布目录相对脚本上一级（即 `每日一句\publish\`）。
 - `DefaultDirName={%LOCALAPPDATA}\Programs\{#MyAppName}`：默认安全路径（普通用户可写，无需管理员）。
 - `PrivilegesRequired=admin`：选 `Program Files` 等受保护目录时弹 UAC 提权（**不要**设成 `lowest`，否则写入被拒 → Error 5 拒绝访问）。
@@ -156,7 +156,7 @@ innosetup-6.x.x.exe /VERYSILENT /SUPPRESSMSGBOXES /DIR="C:\Users\Administrator\D
 ### 4.6 复现命令（一句话版）
 ```
 dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=true -o publish
-.tools\InnoSetup\ISCC.exe installer\每日一句.iss
+.tools\InnoSetup\ISCC.exe installer\拾句.iss
 ```
 
 ---
@@ -165,8 +165,8 @@ dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=
 
 ### 5.1 启动流程（`App.OnStartup`）
 ```
-单实例检查(Mutex "每日一句_SingleInstance")
-  → 确保 %APPDATA%/每日一句 目录
+单实例检查(Mutex "拾句_SingleInstance")
+  → 确保 %APPDATA%/拾句 目录
   → 加载 settings.json（无则迁移旧 data.json 的 Settings 节点）
   → 加载今日句（无则后台 FetchAsync 补抓）
   → 同步开机自启状态（Autostart.Set）
@@ -208,7 +208,7 @@ WidgetWindow 刷新 / 设置页「立即更新」
 - 设置页与拾色器共用 `ThemeHelper.ApplyTo` 的 10 个 DynamicResource 调色板，保证同款换肤。
 
 ### 5.6 单实例与托盘
-- 单实例：命名 Mutex `每日一句_SingleInstance`，已运行则 `Shutdown()`。
+- 单实例：命名 Mutex `拾句_SingleInstance`，已运行则 `Shutdown()`。
 - 设置窗单例：`WidgetWindow.OpenSettings()` 复用同一个 `SettingsWindow`（关闭走 `Hide()` 非 `Close()`，再次打开重新 `Show`/`Activate`）。托盘菜单与浮窗右键共用此单例，避免开两个窗口。
 - 退出：`App.OnExit` 释放托盘图标（`Visible=false` + `Dispose`，避免幽灵图标）、停定时器、释放 Mutex。
 
@@ -242,7 +242,7 @@ WidgetWindow 刷新 / 设置页「立即更新」
 
 ## 7. 数据文件格式
 
-**`data.json`**（`%APPDATA%\每日一句\`，仅语料）
+**`data.json`**（`%APPDATA%\拾句\`，仅语料）
 ```json
 {
   "TodayQuote": { "English": "...", "Chinese": "...", "Author": "...", "Date": "2026-08-11", "FetchedAt": "..." },
@@ -250,7 +250,7 @@ WidgetWindow 刷新 / 设置页「立即更新」
 }
 ```
 
-**`settings.json`**（`%APPDATA%\每日一句\`，仅设置）
+**`settings.json`**（`%APPDATA%\拾句\`，仅设置）
 ```json
 {
   "Theme": "light",
@@ -346,7 +346,7 @@ WidgetWindow 刷新 / 设置页「立即更新」
 - [ ] `dotnet build -c Debug` 通过（若 MSB3027 失败，先退出旧进程）
 - [ ] `dotnet run` 看到桌面浮窗 + 托盘图标
 - [ ] 改一行代码 → 重新构建 → 验证行为变化（确认你改的就是这份源码）
-- [ ] 想打包：`dotnet publish ... -o publish` → `ISCC.exe installer\每日一句.iss` → 验证 `installer\每日一句_setup.exe` 约 48MB
+- [ ] 想打包：`dotnet publish ... -o publish` → `ISCC.exe installer\拾句.iss` → 验证 `installer\拾句_setup.exe` 约 48MB
 - [ ] 阅读 `功能测试报告.md`、`每日一句-多Agent协作方案.md`、`.workbuddy/overview_*.md` 了解历史决策
 - [ ] 提交前先汇报，等确认；不要推送
 

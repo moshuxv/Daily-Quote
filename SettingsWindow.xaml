@@ -952,7 +952,6 @@
                         <Grid x:Name="SecAbout" Visibility="Collapsed">
                             <StackPanel>
                                 <TextBlock Text="关于 拾句" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource TextBrush}"/>
-                                <TextBlock Text="拾句 · Daily Quote —— 桌面浮窗每日金句小工具" Style="{StaticResource HintStyle}" Margin="0,4,0,0"/>
 
                                 <StackPanel Margin="0,16,0,0">
                                     <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,14">

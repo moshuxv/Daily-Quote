@@ -16,9 +16,9 @@ public partial class App : Application
     public static AppSettings CurrentSettings { get; set; } = new();
     public static Quote CurrentQuote { get; set; } = new();
 
-    /// <summary>数据目录：%APPDATA%/每日一句</summary>
+    /// <summary>数据目录：%APPDATA%/拾句</summary>
     public static string DataDir { get; } =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "每日一句");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "拾句");
 
     /// <summary>数据文件：data.json（仅语料：今日句 + 语料库）</summary>
     public static string DataFile => Path.Combine(DataDir, "data.json");
@@ -28,13 +28,34 @@ public partial class App : Application
 
     private Mutex? _mutex;
     private bool _ownsMutex;
-    private const string MutexName = "每日一句_SingleInstance";
+    private const string MutexName = "拾句_SingleInstance";
 
     /// <summary>系统托盘图标（通知区）。程序无主窗口，托盘是任务栏图标的合理出口。</summary>
     private WinForms.NotifyIcon? _notifyIcon;
 
     /// <summary>每日 0 点自动更新定时器（一次性触发，每次触发后重新对准下一个 00:00）。</summary>
     private System.Timers.Timer? _dailyTimer;
+
+    /// <summary>
+    /// 改名一次性迁移：把旧数据目录 %APPDATA%/每日一句 整体搬至 拾句。
+    /// 仅当新目录不存在时才移动，绝不删除旧数据（旧目录已存在时保持不动，避免误删）。
+    /// </summary>
+    private static void MigrateLegacyDataDir()
+    {
+        try
+        {
+            string legacy = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "每日一句");
+            if (Directory.Exists(legacy) && !Directory.Exists(DataDir))
+            {
+                Directory.Move(legacy, DataDir);
+            }
+        }
+        catch
+        {
+            // 迁移失败静默：下次启动会重试；不影响新目录下的正常运行
+        }
+    }
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -50,6 +71,9 @@ public partial class App : Application
         };
 
         base.OnStartup(e);
+
+        // 改名迁移：把旧数据目录 %APPDATA%/每日一句 搬到 拾句，避免用户设置/位置记忆丢失
+        MigrateLegacyDataDir();
 
         // async void：任何逸出的异常都会直接终结进程，故整体兜底
         try
@@ -227,7 +251,7 @@ public partial class App : Application
     /// </summary>
     internal static void LogWarn(Exception? ex) => WriteLog("WARN", ex);
 
-    /// <summary>写入 %APPDATA%/每日一句/crash.log（追加）。</summary>
+    /// <summary>写入 %APPDATA%/拾句/crash.log（追加）。</summary>
     private static void WriteLog(string level, Exception? ex)
     {
         try
