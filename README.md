@@ -57,6 +57,7 @@
 ├── ContextMenuWindow.xaml(.cs) # 浮窗右键菜单（独立顶层窗口，避免被主窗口边界裁切）
 ├── ColorPickerWindow.xaml(.cs) # 自建 HSB 拾色器（1670 万色，无 WinForms ColorDialog）
 ├── ThemeHelper.cs              # 系统深浅判定（注册表 AppsUseLightTheme）+ 主题画刷应用
+├── TextAnimationEngine.cs       # 文字动画共享引擎（打字机/解密文本/文本生成效果/文本上浮；浮窗与设置预览共用）
 │
 ├── Assets/
 │   ├── app.ico                 # 应用图标（嵌入资源，供 exe/窗口/托盘使用）
@@ -69,9 +70,7 @@
 ├── publish/                   # dotnet publish 输出（被 .gitignore 忽略，可重建）
 ├── .tools/InnoSetup/          # Inno Setup 编译器（被 .gitignore 忽略，不入库）
 ├── bin/ obj/                  # 构建中间产物（被 .gitignore 忽略）
-│
-├── 功能测试报告.md             # 43 项功能测试矩阵 + 修复清单
-├── 每日一句-多Agent协作方案.md # 多 Agent 协作方法论（角色/波次/铁律）
+├── archive/                  # 已归档的废弃/调查脚本与旧语料源（不参与构建，可随时整体删除）
 └── .workbuddy/                # 项目记忆与开发笔记（overview_*.md 等，不入库）
 ```
 
@@ -217,8 +216,8 @@ WidgetWindow 刷新 / 设置页「立即更新」
 ## 6. 功能清单
 
 **浮窗（WidgetWindow）**
-- 透明渐变卡片，置于桌面层
-- 打字机效果（英文→中文→作者逐字浮现，可关）
+- 透明渐变卡片，置于桌面壁纸层（WorkerW）
+- 文字动画（打字机 / 解密文本 / 文本生成效果 / 文本上浮 四种效果可切换；关闭则直接显示全文）
 - 手动拖拽移动（阈值 5px 区分点击/拖拽）、位置记忆（退出落盘，重启还原）
 - 单击/双击动作可配置（random / settings / copy / none）
 - 内联右键菜单（刷新 / 复制 / 设置 / 锁定位置 / 退出）
@@ -259,7 +258,8 @@ WidgetWindow 刷新 / 设置页「立即更新」
   "FontFamily": "system",
   "FontSize": 18,
   "BackgroundColor": "",
-  "Typewriter": true,
+  "TextAnimationEnabled": true,
+  "TextAnimationEffect": "打字机",
   "ClickAction": "random",
   "DoubleAction": "settings",
   "RefreshInterval": 1440,
@@ -297,7 +297,7 @@ WidgetWindow 刷新 / 设置页「立即更新」
 
 2. **`publish\win-x64\` 冗余导致安装包膨胀到 96MB**：见 §4.3，安装脚本必须显式列文件，勿通配整目录。
 
-3. **`double.NaN` 序列化历史 bug（已修）**：曾因 `JsonOptions` 缺 `AllowNamedFloatingPointLiterals`，导致所有写盘（设置保存、抓句入库、事件刷新）静默失败——表现为"除了双击开设置，其他全失效"。修复见 `功能测试报告.md`。**新增/重命名字段务必同步 WidgetWindow / SettingsWindow / ThemeHelper。**
+3. **`double.NaN` 序列化历史 bug（已修）**：曾因 `JsonOptions` 缺 `AllowNamedFloatingPointLiterals`，导致所有写盘（设置保存、抓句入库、事件刷新）静默失败——表现为"除了双击开设置，其他全失效"。**新增/重命名字段务必同步 WidgetWindow / SettingsWindow / ThemeHelper。**
 
 4. **冻结画刷**：`Brushes.White` 等是冻结画刷，改 `.Opacity` 前需 `Clone()`，否则崩启动。
 
@@ -313,14 +313,14 @@ WidgetWindow 刷新 / 设置页「立即更新」
 
 ## 10. 测试情况
 
-详见 `功能测试报告.md`（43 项功能测试全部 ✅）：
-- 浮窗 16 项（显示/透明度/右键/今日句/拖拽/位置记忆/自启/单双击/刷新…）
-- 设置窗 19 项（实时预览/保存落盘/失败提示/自启回读/字号色宽/单例…）
-- 后端/原生 8 项（NaN 序列化/事件链/抓取超时/本地优先/注册表自启/HttpClient 头…）
+无独立测试报告文件。验证以**静态审计 + 本机（Windows 真机）实跑**为主：
+- 浮窗：显示/透明度/右键/今日句/拖拽/位置记忆/自启/单双击/刷新…
+- 设置窗：实时预览/保存落盘/失败提示/自启回读/字号色宽/单例/动画预览即时生效…
+- 后端/原生：NaN 序列化/事件链/抓取超时/本地优先/注册表自启/HttpClient 头…
 
-验证方式：静态审计为主 + 后端 console 子项目实测（测完删除）+ 真实 STA+WPF GUI 探针 + 启动真实 exe 看 crash.log。
+验证方式：静态审计为主 + 后端 console 子项目实测（测完删除）+ 真实 STA+WPF GUI 探针 + 启动真实 exe 看 `crash.log`。
 
-> 需本机（Windows 真机，非沙箱）确认项：浮窗视觉观感、联网抓取、开机自启重启效果、中文路径下读写。
+> 需本机（Windows 真机，非沙箱）确认项：四种文字动画的视觉观感、联网抓取、开机自启重启效果、中文路径下读写。
 
 ---
 
@@ -331,11 +331,12 @@ WidgetWindow 刷新 / 设置页「立即更新」
 2. **工作文件仅限本项目目录**：发布产物、安装脚本、setup.exe、编译器全在 `每日一句` 内（`installer\`、`.tools\`、`publish\`），**不要散落到项目外目录**。
 3. **每步先汇报计划、确认后再执行**（尤其启动多 Agent 协作前）。
 
-### 11.2 多 Agent 协作模式（详见 `每日一句-多Agent协作方案.md`）
+### 11.2 多 Agent 协作模式（方法论见 `.workbuddy/memory/MEMORY.md` 与历史日志，不在仓库根目录）
 - **角色**：Lead（架构师+协调者+集成者，无独立 PM）/ 文件归属 Agent（各负责一组独占文件）/ 专职 QA+Fix（独立审计+真编译+修真 bug）/ 测试子 Agent（仅审计+构建验证，不改文件）。
 - **波次**：规划定契约 → 并行分派实现 → 收口 → QA 独立验证 → Lead 集成。
 - **跨 Agent 契约**：事件签名 `SettingsService.Changed` 是 `event EventHandler`（非 `Action`）；颜色统一 `AppSettings.ColorText`；换肤真相源 `ThemeHelper.IsSystemDark()`；拾色器 `ColorPickerWindow.Show(owner, initialHex)→string?`；序列化共用 `DataStore.JsonOptions`。
 - **构建验证**：`dotnet build`（本机为准）；进程锁 `bin` 时用 `dotnet build -o <tmp>` 复验；独立测试工程放主工程**外**（SDK 风格 `**/*.cs` 会误并入导致"多入口点"编译失败）。
+- 多 Agent 协作方法论见 `.workbuddy/memory/MEMORY.md` 与历史日志（`2026-08-08.md` 等），不在仓库根目录。
 
 ---
 
@@ -347,7 +348,7 @@ WidgetWindow 刷新 / 设置页「立即更新」
 - [ ] `dotnet run` 看到桌面浮窗 + 托盘图标
 - [ ] 改一行代码 → 重新构建 → 验证行为变化（确认你改的就是这份源码）
 - [ ] 想打包：`dotnet publish ... -o publish` → `ISCC.exe installer\拾句.iss` → 验证 `installer\拾句_setup.exe` 约 48MB
-- [ ] 阅读 `功能测试报告.md`、`每日一句-多Agent协作方案.md`、`.workbuddy/overview_*.md` 了解历史决策
+- [ ] 阅读 `.workbuddy/overview_*.md`、`.workbuddy/memory/` 了解历史决策
 - [ ] 提交前先汇报，等确认；不要推送
 
 ---

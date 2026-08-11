@@ -994,7 +994,7 @@
                                             <TextBlock Text="简介" Style="{StaticResource LabelStyle}" VerticalAlignment="Top" Margin="0,2,0,0"/>
                                             <TextBlock Grid.Column="1" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                                        TextWrapping="Wrap" LineHeight="22">
-                                                拾句是一个电脑桌面小部件:展示一句英文金句和对应的中文翻译，还带打字机动画效果。支持开机自动启动、随机换一句、手动刷新，也能一键复制到剪贴板。
+                                                拾句是一个电脑桌面小部件:展示一句英文金句和对应的中文翻译，还带文字动画效果。支持开机自动启动、随机换一句、手动刷新，也能一键复制到剪贴板。
                                             </TextBlock>
                                         </Grid>
                                     </Border>
