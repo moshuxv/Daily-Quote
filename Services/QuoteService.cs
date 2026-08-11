@@ -87,8 +87,14 @@ public static class QuoteService
     /// <summary>种子化只需成功判定一次，之后短路，避免每次取句都读一遍 3598 条语料。</summary>
     private static bool _seeded;
 
-    /// <summary>并发保护：多处 await 同时触发种子化时避免重复写盘。</summary>
-    private static readonly SemaphoreSlim SeedLock = new(1, 1);
+    /// <summary>
+    /// 内存缓存：种子化后把整份 data.json 缓存在静态字段，避免每次取句/随机都从磁盘
+    /// 重新读 + 反序列化 3598 条语料（否则每分钟刷新都会读 ~947KB）。写盘时同步刷新本缓存。
+    /// </summary>
+    private static QuoteDataFile? _cache;
+
+    /// <summary>IO 串行化：保护"读缓存→改→写盘"的原子性，避免并发读写 data.json 互相覆盖。</summary>
+    private static readonly SemaphoreSlim _ioLock = new(1, 1);
 
     /// <summary>当前展示句（占位句为默认值）。</summary>
     public static Quote Current { get; private set; } = new Quote
@@ -98,33 +104,50 @@ public static class QuoteService
         Author = "Robert Frost"
     };
 
+    /// <summary>今日日期字符串，与 Quote.Date 同格式（"yyyy-MM-dd"）。</summary>
+    private static string TodayKey => DateTime.Now.ToString("yyyy-MM-dd");
+
+    /// <summary>该语录是否属于"今天"（Date 缺失或为往日均视为否）。</summary>
+    private static bool IsToday(Quote? q) => q != null && q.Date == TodayKey;
+
     /// <summary>
-    /// 首次运行时把内置 corpus.json 灌入 AppData 的 data.json。
-    /// data.json 已有语料则跳过（用户已有数据优先，绝不覆盖）；
-    /// corpus.json 缺失/损坏一律静默跳过，不影响其他功能。
+    /// 读取（并热身）内存缓存。调用方须持有 _ioLock；缓存为空时才从磁盘加载，
+    /// 之后所有读都走内存，不再触碰磁盘。
     /// </summary>
-    public static async Task EnsureSeededAsync()
+    private static async Task<QuoteDataFile> GetCachedAsync()
+    {
+        if (_cache is null) _cache = await DataStore.ReadAsync().ConfigureAwait(false);
+        return _cache;
+    }
+
+    /// <summary>
+    /// 种子化（调用方须持有 _ioLock）：仅首次把 corpus.json 灌入 data.json；
+    /// 之后 _seeded 短路。data.json 已有语料则跳过（用户已有数据优先，绝不覆盖）。
+    /// </summary>
+    private static async Task SeedIfNeededAsync()
     {
         if (_seeded) return;
+        var data = await GetCachedAsync().ConfigureAwait(false);
+        if (data.Quotes.Count > 0)
+        {
+            _seeded = true;
+            return;
+        }
+        var seed = await LoadCorpusAsync().ConfigureAwait(false);
+        if (seed.Count == 0) return; // 没读到语料，下次仍可重试
+        data.Quotes = seed;
+        await DataStore.WriteAsync(data).ConfigureAwait(false);
+        _cache = data;
+        _seeded = true;
+    }
 
-        await SeedLock.WaitAsync().ConfigureAwait(false);
+    /// <summary>首次运行时把内置 corpus.json 灌入 AppData 的 data.json（对外公开入口）。</summary>
+    public static async Task EnsureSeededAsync()
+    {
+        await _ioLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (_seeded) return;
-
-            var data = await DataStore.ReadAsync().ConfigureAwait(false);
-            if (data.Quotes.Count > 0)
-            {
-                _seeded = true;
-                return;
-            }
-
-            var seed = await LoadCorpusAsync().ConfigureAwait(false);
-            if (seed.Count == 0) return; // 没读到语料，下次仍可重试
-
-            data.Quotes = seed;
-            await DataStore.WriteAsync(data).ConfigureAwait(false);
-            _seeded = true;
+            await SeedIfNeededAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -132,7 +155,7 @@ public static class QuoteService
         }
         finally
         {
-            SeedLock.Release();
+            _ioLock.Release();
         }
     }
 
@@ -173,41 +196,54 @@ public static class QuoteService
         return result;
     }
 
-    /// <summary>今日日期字符串，与 Quote.Date 同格式（"yyyy-MM-dd"）。</summary>
-    private static string TodayKey => DateTime.Now.ToString("yyyy-MM-dd");
-
-    /// <summary>该语录是否属于"今天"（Date 缺失或为往日均视为否）。</summary>
-    private static bool IsToday(Quote? q) => q != null && q.Date == TodayKey;
-
     /// <summary>
-    /// 抓取/刷新当日句。
-    /// force=false 且 data.json 已有"当天"的今日句时直接返回；否则调 ShanbayService，
-    /// 成功则写 data.json（today_quote + 按 Date 去重追加 quotes）并更新 Current。
+    /// 抓取/刷新当日句（数据层增量：每次只新增/更新当天那一条，按 Date 去重，写盘仍是整文件）。
+    /// 内存缓存使"判定今日句""写回"都不再从磁盘重新读 3598 条语料。
     /// </summary>
     public static async Task<Quote?> FetchAsync(bool force)
     {
         try
         {
-            // 先种子化：否则首次抓取会把仅含 1 条的 quotes 写盘，
-            // 之后 EnsureSeededAsync 因"已有语料"永久跳过，内置语料再也进不来。
-            await EnsureSeededAsync().ConfigureAwait(false);
-
-            if (!force)
+            // 阶段1：持锁快速判定是否需要联网（无网络耗时）
+            bool needNetwork;
+            await _ioLock.WaitAsync().ConfigureAwait(false);
+            try
             {
-                var today = await GetTodayAsync().ConfigureAwait(false);
-                // 必须校验日期：跨天后 TodayQuote 仍是昨天那条，
-                // 只判 null 会让 0 点自动更新永远短路、再也不联网。
-                if (IsToday(today)) return today;
+                await SeedIfNeededAsync().ConfigureAwait(false);
+                var data = await GetCachedAsync().ConfigureAwait(false);
+                needNetwork = force || !IsToday(data.TodayQuote);
+            }
+            finally
+            {
+                _ioLock.Release();
             }
 
+            // 已是最新今日句，无需联网：直接返回缓存中的今日句
+            if (!needNetwork)
+            {
+                var cached = await GetCachedAsync().ConfigureAwait(false);
+                return cached.TodayQuote;
+            }
+
+            // 阶段2：联网抓取（不持锁，避免 10s 超时阻塞其它操作）
             var quote = await ShanbayService.FetchTodayAsync().ConfigureAwait(false);
             if (quote == null) return null;
 
-            var data = await DataStore.ReadAsync().ConfigureAwait(false);
-            data.TodayQuote = quote;
-            data.Quotes.RemoveAll(q => q.Date == quote.Date);
-            data.Quotes.Insert(0, quote);
-            await DataStore.WriteAsync(data).ConfigureAwait(false);
+            // 阶段3：持锁写回（重新取缓存，可能已被其它线程更新过）
+            await _ioLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                var data = await GetCachedAsync().ConfigureAwait(false);
+                data.TodayQuote = quote;
+                data.Quotes.RemoveAll(q => q.Date == quote.Date);
+                data.Quotes.Insert(0, quote);
+                await DataStore.WriteAsync(data).ConfigureAwait(false);
+                _cache = data;
+            }
+            finally
+            {
+                _ioLock.Release();
+            }
 
             Current = quote;
             return quote;
@@ -220,34 +256,37 @@ public static class QuoteService
     }
 
     /// <summary>
-    /// 手动更新今日语录（按当天去重，供"立即更新"按钮调用）。
-    /// 始终从 API 取数，不再因本地已有当天句而短路。
-    /// 三态返回：
-    /// <list type="bullet">
-    /// <item>(新句, false, false)：联网抓取成功并已写盘；</item>
-    /// <item>(null, false, NetworkFailed=true)：联网失败或发生异常。</item>
-    /// </list>
-    /// 注意：成功时 AlreadyUpToDate 恒为 false（总是联网取数），设置页会走"已更新今日句子"分支。
+    /// 手动更新今日语录（按当天去重，供"立即更新"按钮调用）。始终从 API 取数。
+    /// 三态返回：(新句, false, false) 成功 / (null, false, NetworkFailed=true) 联网失败。
     /// </summary>
     public static async Task<(Quote? Quote, bool AlreadyUpToDate, bool NetworkFailed)> UpdateTodayAsync()
     {
         try
         {
-            // 与 FetchAsync 一致：先种子化，避免首次写盘挡住内置语料灌入
-            await EnsureSeededAsync().ConfigureAwait(false);
+            await _ioLock.WaitAsync().ConfigureAwait(false);
+            try { await SeedIfNeededAsync().ConfigureAwait(false); }
+            finally { _ioLock.Release(); }
 
-            // "立即更新"始终从 API 取数，不再因本地已有当天句而短路。
             var quote = await ShanbayService.FetchTodayAsync().ConfigureAwait(false);
-            if (quote == null) return (null, false, true);          // 联网失败
+            if (quote == null) return (null, false, true); // 联网失败
 
-            var data = await DataStore.ReadAsync().ConfigureAwait(false);
-            data.TodayQuote = quote;
-            data.Quotes.RemoveAll(q => q.Date == quote.Date);        // 按日期去重，避免重复
-            data.Quotes.Insert(0, quote);
-            await DataStore.WriteAsync(data).ConfigureAwait(false);
+            await _ioLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                var data = await GetCachedAsync().ConfigureAwait(false);
+                data.TodayQuote = quote;
+                data.Quotes.RemoveAll(q => q.Date == quote.Date); // 按日期去重，避免重复
+                data.Quotes.Insert(0, quote);
+                await DataStore.WriteAsync(data).ConfigureAwait(false);
+                _cache = data;
+            }
+            finally
+            {
+                _ioLock.Release();
+            }
 
             Current = quote;
-            return (quote, false, false);                            // 成功（已从 API 取得）
+            return (quote, false, false); // 成功（已从 API 取得）
         }
         catch (Exception ex)
         {
@@ -256,42 +295,61 @@ public static class QuoteService
         }
     }
 
-    /// <summary>返回 data.json 中的今日句；无则 null。</summary>
+    /// <summary>返回当前缓存中的今日句；无则 null。</summary>
     public static async Task<Quote?> GetTodayAsync()
     {
-        var data = await DataStore.ReadAsync().ConfigureAwait(false);
-        return data.TodayQuote;
+        await _ioLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            return (await GetCachedAsync().ConfigureAwait(false)).TodayQuote;
+        }
+        finally
+        {
+            _ioLock.Release();
+        }
     }
 
-    /// <summary>从本地语料随机取一句并更新 Current；语料为空返回占位句。</summary>
+    /// <summary>从内存语料随机取一句并更新 Current；语料为空返回占位句。</summary>
     public static async Task<Quote> GetRandomAsync()
     {
         try
         {
-            await EnsureSeededAsync().ConfigureAwait(false);
-
-            var data = await DataStore.ReadAsync().ConfigureAwait(false);
-            if (data.Quotes.Count > 0)
+            await _ioLock.WaitAsync().ConfigureAwait(false);
+            try
             {
-                var q = data.Quotes[Random.Shared.Next(data.Quotes.Count)];
-                Current = q;
-                return q;
+                await SeedIfNeededAsync().ConfigureAwait(false);
+                var data = await GetCachedAsync().ConfigureAwait(false);
+                if (data.Quotes.Count > 0)
+                {
+                    var q = data.Quotes[Random.Shared.Next(data.Quotes.Count)];
+                    Current = q;
+                    return q;
+                }
+            }
+            finally
+            {
+                _ioLock.Release();
             }
         }
         catch (Exception ex)
         {
-            // 忽略读取异常，回退占位句
             App.LogWarn(ex);
         }
         return Current;
     }
 
-    /// <summary>本地语料条数（quotes 数组长度）。</summary>
+    /// <summary>内存语料条数（Quotes 数组长度）。</summary>
     public static async Task<int> GetQuoteCountAsync()
     {
-        await EnsureSeededAsync().ConfigureAwait(false);
-
-        var data = await DataStore.ReadAsync().ConfigureAwait(false);
-        return data.Quotes.Count;
+        await _ioLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await SeedIfNeededAsync().ConfigureAwait(false);
+            return (await GetCachedAsync().ConfigureAwait(false)).Quotes.Count;
+        }
+        finally
+        {
+            _ioLock.Release();
+        }
     }
 }

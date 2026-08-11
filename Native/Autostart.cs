@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using System.Windows;
 using Microsoft.Win32;
 
@@ -23,7 +22,8 @@ public static class Autostart
 
             if (enabled)
             {
-                key.SetValue(ValueName, GetExecutablePath());
+                string path = GetExecutablePath();
+                if (!string.IsNullOrEmpty(path)) key.SetValue(ValueName, path);
             }
             else
             {
@@ -50,18 +50,13 @@ public static class Autostart
         }
     }
 
-    /// <summary>可执行文件路径（带引号）。</summary>
+    /// <summary>
+    /// 可执行文件路径（带引号）。单文件应用下 Assembly.Location 恒为空串（会触发 IL3000 警告），
+    /// Environment.ProcessPath 才是单文件模式下可靠的 exe 路径来源。
+    /// </summary>
     private static string GetExecutablePath()
     {
         string? path = Environment.ProcessPath;
-        if (string.IsNullOrEmpty(path))
-        {
-            try { path = Application.ResourceAssembly.Location; } catch { }
-        }
-        if (string.IsNullOrEmpty(path))
-        {
-            path = Assembly.GetEntryAssembly()?.Location;
-        }
-        return "\"" + path + "\"";
+        return string.IsNullOrEmpty(path) ? "" : "\"" + path + "\"";
     }
 }

@@ -106,6 +106,7 @@ public static class WorkerW
 
     private static void Dbg(string s)
     {
+#if DEBUG
         try
         {
             System.IO.File.AppendAllText(
@@ -113,6 +114,7 @@ public static class WorkerW
                 System.DateTime.Now.ToString("HH:mm:ss.fff") + " " + s + "\n");
         }
         catch { }
+#endif
     }
 
     /// <summary>挂载窗口到桌面层（WorkerW，图标之下）。成功返回 true，失败返回 false（不抛异常）。</summary>
@@ -120,7 +122,9 @@ public static class WorkerW
     {
         try
         {
+#if DEBUG
             try { System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "workerw_attach.log"), ""); } catch { }
+#endif
             if (w == null) return false;
 
             var helper = new WindowInteropHelper(w);
