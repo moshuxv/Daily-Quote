@@ -1,0 +1,40 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>Assets/app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!--
+    UseWindowsForms 会隐式 global using System.Windows.Forms / System.Drawing，
+    与 WPF 的 Application/Brush/Color/Point/FontFamily 等同名类型冲突（CS0104）。
+    这里仅移除隐式 using（程序集引用保留，需要时显式 using 即可）。
+  -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <!-- Link 让语料落到输出目录根部，与 QuoteService 的 AppContext.BaseDirectory/corpus.json 对齐 -->
+  <ItemGroup>
+    <None Include="Assets\corpus.json" Link="corpus.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
+    SettingsWindow.xaml 的 Icon="Assets/app.ico" 会被解析成
+    pack://application:,,,/Assets/app.ico，只能命中程序集内的资源；
+    用 None+CopyToOutputDirectory 把它当松散文件拷到输出目录是解析不到的
+    （既不在 .g.resources，也没有 AssemblyAssociatedContentFile 登记），
+    运行时会抛 IOException"找不到资源 assets/app.ico"。故必须用 Resource 嵌入。
+    ApplicationIcon 是另一套机制（写 exe 的 Win32 图标资源），二者互不影响。
+  -->
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
+
+</Project>
