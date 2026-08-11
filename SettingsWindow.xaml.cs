@@ -39,6 +39,17 @@ public partial class SettingsWindow : Window
     /// <summary>输入框 ⇄ 下拉互相同步时的重入守卫</summary>
     private bool _syncingInterval;
 
+    /// <summary>预览卡片动画引擎：与浮窗共用 TextAnimationEngine，选择动画效果时预览实时生效。</summary>
+    private TextAnimationEngine? _previewAnim;
+
+    /// <summary>预览卡片固定展示的示例句（与 XAML 里的默认文案一致）。</summary>
+    private static readonly Quote PreviewQuote = new Quote
+    {
+        English = "The best way out is always through.",
+        Chinese = "最好的出路永远都是走下去。",
+        Author = "Robert Frost"
+    };
+
     public SettingsWindow()
     {
         // 置位加载标志，屏蔽 XAML 加载期触发的事件副作用（IsChecked=True 会触发
@@ -46,6 +57,23 @@ public partial class SettingsWindow : Window
         _loading = true;
         InitializeComponent();
         Loaded += OnLoaded;
+
+        // 预览卡片动画引擎：锁尺寸回调针对预览卡片（Border），避免动画期间卡片抖动
+        _previewAnim = new TextAnimationEngine(PvEnglish, PvChinese, PvAuthor,
+            updateLayout: () => UpdateLayout(),
+            onLock: () =>
+            {
+                if (PreviewCard.ActualWidth > 0 && PreviewCard.ActualHeight > 0)
+                {
+                    PreviewCard.Width = PreviewCard.ActualWidth;
+                    PreviewCard.Height = PreviewCard.ActualHeight;
+                }
+            },
+            onUnlock: () =>
+            {
+                PreviewCard.Width = double.NaN;
+                PreviewCard.Height = double.NaN;
+            });
     }
 
     // ==================== 初始化 ====================
@@ -69,6 +97,9 @@ public partial class SettingsWindow : Window
 
         ApplyToUI();
         _loading = false;
+
+        // 进入即可见动画效果：延迟到首帧布局完成后再播，避免预览卡片还没量到尺寸就锁定（会轻微抖动）
+        _ = Dispatcher.BeginInvoke(new Action(PlayPreview), System.Windows.Threading.DispatcherPriority.Render);
 
         // 订阅外部设置变更（右键菜单锁定/取消锁定等），实时刷新本页显示
         SettingsService.Changed += OnExternalSettingsChanged;
@@ -113,7 +144,9 @@ public partial class SettingsWindow : Window
 
         AutostartToggle.IsChecked = s.Autostart;
         LockToggle.IsChecked = s.LockPosition;
-        TypewriterToggle.IsChecked = s.Typewriter;
+        TextAnimationToggle.IsChecked = s.TextAnimationEnabled;
+        SelectComboByTag(EffectCombo, s.TextAnimationEffect);
+        EffectRow.Visibility = s.TextAnimationEnabled ? Visibility.Visible : Visibility.Collapsed;
 
         ApplyTheme(s.Theme);
         UpdatePreview();
@@ -137,7 +170,8 @@ public partial class SettingsWindow : Window
         }
         s.Autostart = AutostartToggle.IsChecked == true;
         s.LockPosition = LockToggle.IsChecked == true;
-        s.Typewriter = TypewriterToggle.IsChecked == true;
+        s.TextAnimationEnabled = TextAnimationToggle.IsChecked == true;
+        s.TextAnimationEffect = SelectedTag(EffectCombo) ?? "打字机";
     }
 
     // ==================== 主题 ====================
@@ -461,10 +495,32 @@ public partial class SettingsWindow : Window
         {
             App.CurrentSettings.LockPosition = LockToggle.IsChecked == true;
         }
-        else if (ReferenceEquals(sender, TypewriterToggle))
+        else if (ReferenceEquals(sender, TextAnimationToggle))
         {
-            App.CurrentSettings.Typewriter = TypewriterToggle.IsChecked == true;
+            App.CurrentSettings.TextAnimationEnabled = TextAnimationToggle.IsChecked == true;
+            EffectRow.Visibility = App.CurrentSettings.TextAnimationEnabled ? Visibility.Visible : Visibility.Collapsed;
+            PlayPreview();
         }
+    }
+
+    /// <summary>动画效果下拉：写入当前效果名称，并让预览卡片立即用该效果重放一遍。</summary>
+    private void EffectCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading) return;
+        App.CurrentSettings.TextAnimationEffect = SelectedTag(EffectCombo) ?? "打字机";
+        PlayPreview();
+    }
+
+    /// <summary>
+    /// 让预览卡片按当前选中的动画效果播放一遍：开启则播放对应效果，关闭则停掉动画并显示完整文字。
+    /// </summary>
+    private void PlayPreview()
+    {
+        if (_previewAnim is null) return;
+        if (App.CurrentSettings.TextAnimationEnabled)
+            _previewAnim.Play(PreviewQuote, App.CurrentSettings.TextAnimationEffect, ColorFromHex(App.CurrentSettings.ColorText));
+        else
+            _previewAnim.Stop();
     }
 
     // ==================== 刷新面板：立即更新 ====================
@@ -598,6 +654,9 @@ public partial class SettingsWindow : Window
         SecRefresh.Visibility = key == "refresh" ? Visibility.Visible : Visibility.Collapsed;
         SecSystem.Visibility = key == "system" ? Visibility.Visible : Visibility.Collapsed;
         SecAbout.Visibility = key == "about" ? Visibility.Visible : Visibility.Collapsed;
+
+        // 切回外观页时让预览卡片按当前效果重放一遍，方便对比不同效果
+        if (key == "appearance") PlayPreview();
     }
 
     // ==================== 关于页：超链接 ====================

@@ -136,7 +136,24 @@ internal static class SettingsStore
         {
             if (!File.Exists(App.SettingsFile)) return null;
             var json = await File.ReadAllTextAsync(App.SettingsFile).ConfigureAwait(false);
-            return JsonSerializer.Deserialize<AppSettings>(json, DataStore.JsonOptions);
+            var loaded = JsonSerializer.Deserialize<AppSettings>(json, DataStore.JsonOptions);
+            if (loaded is null) return null;
+
+            // 迁移：旧字段 Typewriter → TextAnimationEnabled（仅首次读到旧数据时执行一次）
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("Typewriter", out var tw)
+                    && (tw.ValueKind == JsonValueKind.True || tw.ValueKind == JsonValueKind.False)
+                    && !doc.RootElement.TryGetProperty("TextAnimationEnabled", out _))
+                {
+                    loaded.TextAnimationEnabled = tw.GetBoolean();
+                    if (string.IsNullOrEmpty(loaded.TextAnimationEffect)) loaded.TextAnimationEffect = "打字机";
+                }
+            }
+            catch { /* 迁移失败不影响主流程 */ }
+
+            return loaded;
         }
         catch (Exception ex)
         {

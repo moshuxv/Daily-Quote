@@ -778,11 +778,31 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel>
-                                            <TextBlock Text="打字机效果" Style="{StaticResource LabelStyle}"/>
-                                            <TextBlock Text="切换句子时文字逐字浮现" Style="{StaticResource HintStyle}" Margin="0,2,0,0"/>
+                                            <TextBlock Text="文字动画" Style="{StaticResource LabelStyle}"/>
+                                            <TextBlock Text="切换句子时按所选效果播放文字动画" Style="{StaticResource HintStyle}" Margin="0,2,0,0"/>
                                         </StackPanel>
-                                        <ToggleButton x:Name="TypewriterToggle" Style="{StaticResource ToggleStyle}"
+                                        <ToggleButton x:Name="TextAnimationToggle" Style="{StaticResource ToggleStyle}"
                                                       VerticalAlignment="Center" Checked="Toggle_Changed" Unchecked="Toggle_Changed"/>
+                                    </Grid>
+                                </Border>
+
+                                <Border x:Name="EffectRow" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,14" Visibility="Collapsed">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="动画效果" Style="{StaticResource LabelStyle}"/>
+                                            <TextBlock Text="选择文字出现的方式" Style="{StaticResource HintStyle}" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                            <ComboBox x:Name="EffectCombo" Grid.Column="1" Style="{StaticResource SelectStyle}"
+                                                  Width="160" SelectionChanged="EffectCombo_SelectionChanged">
+                                            <ComboBoxItem Content="打字机" Tag="打字机" IsSelected="True"/>
+                                            <ComboBoxItem Content="解密文本" Tag="解密文本"/>
+                                            <ComboBoxItem Content="文本生成效果" Tag="文本生成效果"/>
+                                            <ComboBoxItem Content="文本上浮" Tag="文本上浮"/>
+                                        </ComboBox>
                                     </Grid>
                                 </Border>
 

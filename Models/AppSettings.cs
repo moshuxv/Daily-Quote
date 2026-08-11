@@ -26,8 +26,11 @@ public class AppSettings
     /// <summary>浮窗背景颜色（十六进制 "#0F6CBD"）；空字符串 "" 表示使用主题默认渐变</summary>
     public string BackgroundColor { get; set; } = "";
 
-    /// <summary>打字机效果：句子切换时英文→中文→作者逐字浮现，默认开启</summary>
-    public bool Typewriter { get; set; } = true;
+    /// <summary>文字动画：开启后句子切换时按所选效果播放文字动画，默认开启</summary>
+    public bool TextAnimationEnabled { get; set; } = true;
+
+    /// <summary>当前文字动画效果名称（由动画注册表提供）；默认"打字机"。</summary>
+    public string TextAnimationEffect { get; set; } = "打字机";
 
     // ===== 交互 =====
     /// <summary>单击动作：random / settings / copy / none</summary>

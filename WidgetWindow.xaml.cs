@@ -1,9 +1,12 @@
 using System;
+using System.Text;
 using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.Windows.Threading;
 using 每日一句.Models;
 using 每日一句.Native;
@@ -42,11 +45,12 @@ public partial class WidgetWindow : Window
     /// <summary>位置落盘防抖计时器（停止移动 800ms 后写一次 data.json）</summary>
     private readonly DispatcherTimer _positionSaveTimer;
 
-    /// <summary>打字机逐字动画计时器</summary>
-    private readonly DispatcherTimer _typewriterTimer;
+    /// <summary>通用文字动画引擎（打字机 / 解密文本 / 文本生成 / 文本上浮），浮窗与设置预览共用同一实现。</summary>
+    private readonly TextAnimationEngine _anim;
 
-    /// <summary>当前打字机任务状态（null 表示当前无动画进行中）</summary>
-    private TypewriterJob? _tw;
+    /// <summary>上一次生效的文字动画设置（用于判断设置变更时是否需要重放动画）</summary>
+    private bool _lastAnimEnabled = true;
+    private string _lastAnimEffect = "打字机";
 
     /// <summary>XAML 里的主题渐变画刷，BackgroundColor 清空时用它还原</summary>
     private readonly Brush _themeGradient;
@@ -84,9 +88,28 @@ public partial class WidgetWindow : Window
         _positionSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
         _positionSaveTimer.Tick += OnPositionSaveTick;
 
-        // 打字机逐字动画计时器
-        _typewriterTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(24) };
-        _typewriterTimer.Tick += OnTypewriterTick;
+        // 文字动画引擎：打字机 / 解密文本 / 文本生成 / 文本上浮 共用；锁尺寸回调针对本窗口（需翻转 SizeToContent）
+        _anim = new TextAnimationEngine(EngText, ZhText, AuthorText,
+            updateLayout: () => UpdateLayout(),
+            onLock: () =>
+            {
+                if (ActualWidth > 0 && ActualHeight > 0)
+                {
+                    SizeToContent = SizeToContent.Manual;
+                    Width = ActualWidth;
+                    Height = ActualHeight;
+                }
+            },
+            onUnlock: () =>
+            {
+                SizeToContent = SizeToContent.WidthAndHeight;
+                Width = double.NaN;
+                Height = double.NaN;
+            });
+
+        // 记录初始动画设置，供设置变更时判断是否需要重放
+        _lastAnimEnabled = App.CurrentSettings.TextAnimationEnabled;
+        _lastAnimEffect = App.CurrentSettings.TextAnimationEffect;
 
         // 设置变更监听（其他窗口保存设置后实时生效）
         SettingsService.Changed += OnSettingsChanged;
@@ -136,7 +159,7 @@ public partial class WidgetWindow : Window
     {
         _refreshTimer.Stop();
         _clickTimer.Stop();
-        _typewriterTimer.Stop();
+        _anim.Stop();
 
         // 退出前把还没到点的位置变更冲刷落盘（同步等待，内部无 UI 线程续体，不会死锁）
         bool pending = _positionSaveTimer.IsEnabled;
@@ -251,125 +274,14 @@ public partial class WidgetWindow : Window
         _currentQuote = q;
         App.CurrentQuote = q; // 同步全局当前句，保证设置窗/下次启动取到同一句
 
-        if (App.CurrentSettings.Typewriter)
-            RenderQuoteTypewriter(q);
+        if (App.CurrentSettings.TextAnimationEnabled)
+            _anim.Play(q, App.CurrentSettings.TextAnimationEffect, ColorFromHex(App.CurrentSettings.ColorText));
         else
             SetPlainText(q);
     }
 
-    /// <summary>非打字机模式：直接显示完整文字，并确保窗口未被固定尺寸锁住。</summary>
-    private void SetPlainText(Quote q)
-    {
-        _typewriterTimer.Stop();
-        _tw = null;
-        SizeToContent = SizeToContent.WidthAndHeight;
-        Width = double.NaN;
-        Height = double.NaN;
-        EngText.Text = q.English ?? "";
-        ZhText.Text = q.Chinese ?? "";
-        AuthorText.Text = string.IsNullOrWhiteSpace(q.Author) ? "" : "— " + q.Author;
-    }
-
-    /// <summary>
-    /// 打字机模式渲染：先把全文铺上并强制布局，量出最终窗口尺寸并锁死（动画期间不随文字伸缩），
-    /// 再清空文字、从英文开始逐字浮现（英文 → 中文 → 作者）。
-    /// </summary>
-    private void RenderQuoteTypewriter(Quote q)
-    {
-        _typewriterTimer.Stop();
-
-        string eng = q.English ?? "";
-        string zh = q.Chinese ?? "";
-        string author = string.IsNullOrWhiteSpace(q.Author) ? "" : "— " + q.Author;
-
-        // 0) 测量前先复位成内容自适应尺寸，否则动画未播完时连续切换句子会量到上一轮被钉死的旧尺寸
-        SizeToContent = SizeToContent.WidthAndHeight;
-        Width = double.NaN;
-        Height = double.NaN;
-
-        // 1) 先把全文铺上 + 强制同步布局，量出最终尺寸
-        EngText.Text = eng;
-        ZhText.Text = zh;
-        AuthorText.Text = author;
-        UpdateLayout();
-
-        // 2) 锁死为最终尺寸（防御 0 尺寸：极端情况下退回自适应，不把窗口钉成 0 大小）
-        if (ActualWidth > 0 && ActualHeight > 0)
-        {
-            SizeToContent = SizeToContent.Manual;
-            Width = ActualWidth;
-            Height = ActualHeight;
-        }
-
-        // 3) 清空文字，准备逐字浮现
-        EngText.Text = "";
-        ZhText.Text = "";
-        AuthorText.Text = "";
-
-        _tw = new TypewriterJob(eng, zh, author);
-        if (_tw.TotalLength == 0)
-        {
-            FinishTypewriter(); // 没有可敲的字，直接收尾
-            return;
-        }
-
-        _typewriterTimer.Start();
-    }
-
-    private void OnTypewriterTick(object? sender, EventArgs e)
-    {
-        if (_tw is null) return;
-
-        const int step = 2; // 每次浮现的字符数
-        while (true)
-        {
-            string seg = _tw.CurrentSegment;
-            int segLen = seg.Length;
-
-            if (_tw.Index < segLen)
-            {
-                _tw.Index = Math.Min(segLen, _tw.Index + step);
-                SetSegmentText(_tw.Segment, seg.Substring(0, _tw.Index));
-                return; // 已浮现一部分，等下一拍
-            }
-
-            // 当前段已完成（或本就为空）：推进到下一段
-            if (_tw.Segment >= 2)
-            {
-                FinishTypewriter();
-                return;
-            }
-            _tw.Segment++;
-            _tw.Index = 0;
-            // 空段会在下一轮循环立即再推进，直到遇到非空段或结束
-        }
-    }
-
-    private void SetSegmentText(int seg, string text)
-    {
-        switch (seg)
-        {
-            case 0: EngText.Text = text; break;
-            case 1: ZhText.Text = text; break;
-            default: AuthorText.Text = text; break;
-        }
-    }
-
-    private void FinishTypewriter()
-    {
-        _typewriterTimer.Stop();
-        if (_tw is not null)
-        {
-            EngText.Text = _tw.English;
-            ZhText.Text = _tw.Chinese;
-            AuthorText.Text = _tw.Author;
-        }
-        // 动画结束：恢复 SizeToContent，使后续字号/颜色等设置变更仍能自适应
-        SizeToContent = SizeToContent.WidthAndHeight;
-        Width = double.NaN;
-        Height = double.NaN;
-        _tw = null;
-    }
+    /// <summary>非动画模式：直接显示完整文字（引擎会停掉动画并还原文字、解锁尺寸）。</summary>
+    private void SetPlainText(Quote q) => _anim.SetPlainText(q);
 
     /// <summary>供设置窗口"立即更新"成功后推送新句子到浮窗（必须在 UI 线程调用）。</summary>
     internal void ShowQuote(Quote? q) => RenderQuote(q);
@@ -627,20 +539,20 @@ public partial class WidgetWindow : Window
     {
         try
         {
-            // 关闭打字机时若动画正在进行，立即补全文字并解除固定尺寸
-            if (!App.CurrentSettings.Typewriter && _typewriterTimer.IsEnabled)
+            // 仅当文字动画相关设置发生变化时才重放动画，避免每次调字号/颜色都重播打字机
+            bool animChanged = App.CurrentSettings.TextAnimationEnabled != _lastAnimEnabled
+                            || App.CurrentSettings.TextAnimationEffect != _lastAnimEffect;
+            _lastAnimEnabled = App.CurrentSettings.TextAnimationEnabled;
+            _lastAnimEffect = App.CurrentSettings.TextAnimationEffect;
+
+            if (animChanged)
             {
-                _typewriterTimer.Stop();
-                if (_tw is not null)
-                {
-                    EngText.Text = _tw.English;
-                    ZhText.Text = _tw.Chinese;
-                    AuthorText.Text = _tw.Author;
-                    _tw = null;
-                }
-                SizeToContent = SizeToContent.WidthAndHeight;
-                Width = double.NaN;
-                Height = double.NaN;
+                RenderQuote(_currentQuote); // 用新的开关/效果重放
+            }
+            else if (!App.CurrentSettings.TextAnimationEnabled && _anim.IsAnimating)
+            {
+                // 关闭动画时若动画正在进行，立即补全文字并解除固定尺寸
+                _anim.Stop();
             }
 
             ApplyVisual();
@@ -654,29 +566,4 @@ public partial class WidgetWindow : Window
 
     // ===================== 打字机任务状态 =====================
 
-    /// <summary>打字机任务状态：三段（英文 / 中文 / 作者）依次逐字浮现。</summary>
-    private sealed class TypewriterJob
-    {
-        public string English { get; }
-        public string Chinese { get; }
-        public string Author { get; }
-        public int Segment { get; set; } // 0=英文 1=中文 2=作者
-        public int Index { get; set; }   // 当前段已浮现字符数
-
-        public TypewriterJob(string english, string chinese, string author)
-        {
-            English = english;
-            Chinese = chinese;
-            Author = author;
-        }
-
-        public string CurrentSegment => Segment switch
-        {
-            0 => English,
-            1 => Chinese,
-            _ => Author
-        };
-
-        public int TotalLength => English.Length + Chinese.Length + Author.Length;
-    }
 }
