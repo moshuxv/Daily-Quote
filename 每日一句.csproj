@@ -7,6 +7,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
+    <!-- App.xaml 已移入 Views/，关闭默认 ApplicationDefinition 自动探测（只认根目录 App.xaml），改为下方显式声明 -->
+    <EnableDefaultApplicationDefinitionItems>false</EnableDefaultApplicationDefinitionItems>
     <ApplicationIcon>Assets/app.ico</ApplicationIcon>
     <!-- 产品改名「拾句」：仅改 AssemblyName（影响 exe/程序集名/pack URI/文件属性），
          显式保留 RootNamespace=每日一句，避免 namespace 与 XAML x:Class 全部失效 -->
@@ -27,6 +29,11 @@
   <!-- Link 让语料落到输出目录根部，与 QuoteService 的 AppContext.BaseDirectory/corpus.json 对齐 -->
   <ItemGroup>
     <None Include="Assets\corpus.json" Link="corpus.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- App.xaml 在 Views/ 下，需显式指定为应用程序定义以生成入口点 Main -->
+  <ItemGroup>
+    <ApplicationDefinition Include="Views\App.xaml" />
   </ItemGroup>
 
   <!--
