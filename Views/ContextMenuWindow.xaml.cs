@@ -49,7 +49,14 @@ public partial class ContextMenuWindow : Window
 
     private void BtnRefresh_Click(object sender, RoutedEventArgs e) { _owner.ActionRefresh(); SafeClose(); }
     private void BtnCopy_Click(object sender, RoutedEventArgs e) { _owner.ActionCopy(); SafeClose(); }
-    private void BtnSettings_Click(object sender, RoutedEventArgs e) { _owner.ActionSettings(); SafeClose(); }
+    private void BtnSettings_Click(object sender, RoutedEventArgs e)
+    {
+        // 先关菜单，再弹设置窗：避免 Topmost 菜单在关闭瞬间把设置窗的前台抢走
+        // （浮窗挂在 WorkerW 桌面层时的激活竞态）。菜单关闭后于后台优先级弹出设置窗，
+        // 由 OpenSettings 用 Win32 强制置前，确保一定能浮到最前、不被盖在下面。
+        SafeClose();
+        _owner.Dispatcher.BeginInvoke(new Action(() => _owner.ActionSettings()), System.Windows.Threading.DispatcherPriority.Background);
+    }
     private void BtnLock_Click(object sender, RoutedEventArgs e) { _owner.ActionLock(true); SafeClose(); }
     private void BtnUnlock_Click(object sender, RoutedEventArgs e) { _owner.ActionLock(false); SafeClose(); }
     private void BtnQuit_Click(object sender, RoutedEventArgs e) { _owner.ActionQuit(); SafeClose(); }

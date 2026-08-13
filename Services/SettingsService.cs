@@ -181,7 +181,7 @@ internal static class SettingsStore
 
     private static async Task WriteSettingsFileAsync(AppSettings settings)
     {
-        Directory.CreateDirectory(App.DataDir);
+        Directory.CreateDirectory(App.WritableDataDir);
         var json = JsonSerializer.Serialize(settings, DataStore.JsonOptions);
         await File.WriteAllTextAsync(App.SettingsFile, json).ConfigureAwait(false);
     }

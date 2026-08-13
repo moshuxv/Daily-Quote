@@ -51,7 +51,7 @@ internal static class DataStore
 
     internal static async Task WriteAsync(QuoteDataFile data)
     {
-        Directory.CreateDirectory(App.DataDir);
+        Directory.CreateDirectory(App.WritableDataDir);
         var json = JsonSerializer.Serialize(data, JsonOptions);
         await File.WriteAllTextAsync(App.DataFile, json).ConfigureAwait(false);
     }
@@ -225,8 +225,8 @@ public static class QuoteService
                 return cached.TodayQuote;
             }
 
-            // 阶段2：联网抓取（不持锁，避免 10s 超时阻塞其它操作）
-            var quote = await ShanbayService.FetchTodayAsync().ConfigureAwait(false);
+            // 阶段2：联网抓取（不持锁，避免超时阻塞其它操作）
+            var (quote, _) = await ShanbayService.FetchTodayAsync().ConfigureAwait(false);
             if (quote == null) return null;
 
             // 阶段3：持锁写回（重新取缓存，可能已被其它线程更新过）
@@ -257,9 +257,9 @@ public static class QuoteService
 
     /// <summary>
     /// 手动更新今日语录（按当天去重，供"立即更新"按钮调用）。始终从 API 取数。
-    /// 三态返回：(新句, false, false) 成功 / (null, false, NetworkFailed=true) 联网失败。
+    /// 返回：(新句, 是否已是最新, 抓取状态)。成功 = (quote, false, Ok)；失败 = (null, false, 对应状态)。
     /// </summary>
-    public static async Task<(Quote? Quote, bool AlreadyUpToDate, bool NetworkFailed)> UpdateTodayAsync()
+    public static async Task<(Quote? Quote, bool AlreadyUpToDate, ShanbayService.FetchStatus Status)> UpdateTodayAsync()
     {
         try
         {
@@ -267,8 +267,8 @@ public static class QuoteService
             try { await SeedIfNeededAsync().ConfigureAwait(false); }
             finally { _ioLock.Release(); }
 
-            var quote = await ShanbayService.FetchTodayAsync().ConfigureAwait(false);
-            if (quote == null) return (null, false, true); // 联网失败
+            var (quote, status) = await ShanbayService.FetchTodayAsync().ConfigureAwait(false);
+            if (quote == null) return (null, false, status); // 联网/服务端/解析失败，带具体状态
 
             await _ioLock.WaitAsync().ConfigureAwait(false);
             try
@@ -286,12 +286,12 @@ public static class QuoteService
             }
 
             Current = quote;
-            return (quote, false, false); // 成功（已从 API 取得）
+            return (quote, false, ShanbayService.FetchStatus.Ok); // 成功（已从 API 取得）
         }
         catch (Exception ex)
         {
             App.LogWarn(ex);
-            return (null, false, true);
+            return (null, false, ShanbayService.FetchStatus.NetworkError);
         }
     }
 

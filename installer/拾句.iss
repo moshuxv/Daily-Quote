@@ -45,3 +45,18 @@ Name: desktopicon; Description: "创建桌面快捷方式"; GroupDescription: "�
 [Registry]
 ; 开机自启（HKCU Run 键，卸载时自动清理）
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "拾句"; ValueData: """{app}\{#MyAppName}.exe"""; Flags: uninsdeletevalue
+
+[UninstallRun]
+; 卸载前先结束正在运行的进程，避免文件被占用导致删除失败（彻底卸载）
+Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM {#MyAppName}.exe"; Flags: runhidden; StatusMsg: "正在结束拾句进程…"; RunOnceId: "KillProcBeforeUninstall"
+
+[UninstallDelete]
+; 彻底删除安装目录下运行时生成的数据文件（settings.json / data.json / crash.log）
+Type: files; Name: "{app}\settings.json"
+Type: files; Name: "{app}\data.json"
+Type: files; Name: "{app}\crash.log"
+; 兼容旧版（数据曾存 %APPDATA%\拾句）用户升级时清理残留
+Type: filesandordirs; Name: "{userappdata}\{#MyAppName}"
+; 安装目录不可写时（如装到 Program Files），数据回退到 %LOCALAPPDATA%\拾句，卸载一并清理
+Type: filesandordirs; Name: "{localappdata}\{#MyAppName}"
+

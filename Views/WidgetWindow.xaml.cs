@@ -8,6 +8,8 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Threading;
+using System.Runtime.InteropServices;
+using System.Windows.Interop;
 using 每日一句.Models;
 using 每日一句.Native;
 using 每日一句.Services;
@@ -488,6 +490,19 @@ public partial class WidgetWindow : Window
     /// internal：托盘菜单（App.OpenSettings）也走这里，两个入口共用同一个单例，
     /// 否则托盘与浮窗会各开一个设置窗口。
     /// </summary>
+    // 桌面层（WorkerW）下的窗口置前：Win32 强制置顶 + 置前，规避 .NET Topmost 在菜单关闭瞬间的竞态
+    private const int HWND_TOPMOST = -1;
+    private const int HWND_NOTOPMOST = -2;
+    private const uint SWP_NOMOVE = 0x0001;
+    private const uint SWP_NOSIZE = 0x0002;
+    private const uint SWP_SHOWWINDOW = 0x0040;
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
     internal static void OpenSettings()
     {
         try
@@ -499,16 +514,37 @@ public partial class WidgetWindow : Window
                 _settingsWindow = w;
             }
 
-            if (!_settingsWindow.IsVisible) _settingsWindow.Show();
-            if (_settingsWindow.WindowState == WindowState.Minimized)
-                _settingsWindow.WindowState = WindowState.Normal;
-            _settingsWindow.Activate();
+            var wnd = _settingsWindow;
+            if (!wnd.IsVisible) wnd.Show();
+            if (wnd.WindowState == WindowState.Minimized)
+                wnd.WindowState = WindowState.Normal;
+
+            // 浮窗挂在 WorkerW 桌面层（最底层），右键菜单是 Topmost 窗口；
+            // 从此上下文弹出的设置窗，若仅用 .NET 的 Show+Activate，会在菜单关闭瞬间被夺走前台、
+            // 沉到桌面层下（表现为"点了没反应"）。用 Win32 强制置顶 + 置前，确保一定浮到最前，
+            // 并在首次渲染完成后再降回普通窗口（避免一直压在其他窗口之上）。
+            var hwnd = new WindowInteropHelper(wnd).EnsureHandle();
+            SetWindowPos(hwnd, (IntPtr)HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+            SetForegroundWindow(hwnd);
+            wnd.Activate();
+            wnd.Focus();
+            wnd.ContentRendered -= OnSettingsContentRendered;
+            wnd.ContentRendered += OnSettingsContentRendered;
         }
         catch (Exception ex)
         {
             _settingsWindow = null;
             App.LogCrash(ex);
         }
+    }
+
+    private static void OnSettingsContentRendered(object? sender, EventArgs e)
+    {
+        if (sender is not SettingsWindow w) return;
+        w.ContentRendered -= OnSettingsContentRendered;
+        var hwnd = new WindowInteropHelper(w).Handle;
+        if (hwnd != IntPtr.Zero)
+            SetWindowPos(hwnd, (IntPtr)HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
     }
 
     // ===================== 设置变更监听 =====================

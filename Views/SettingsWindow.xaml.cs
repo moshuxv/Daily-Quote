@@ -531,20 +531,21 @@ public partial class SettingsWindow : Window
         try
         {
             var r = await QuoteService.UpdateTodayAsync();
-            if (r.AlreadyUpToDate)
-            {
-                // 本地已有当天句子，不重复联网，但仍要让浮窗对齐今日句
-                PushToWidgets(r.Quote);
-                ShowToast("今日已更新");
-            }
-            else if (r.Quote is not null)
+            if (r.Quote is not null)
             {
                 PushToWidgets(r.Quote);
                 ShowToast("已更新今日句子");
             }
             else
             {
-                ShowToast("更新失败（网络不可用）");
+                // 据抓取状态给出准确提示，而不是一律"网络不可用"
+                string msg = r.Status switch
+                {
+                    ShanbayService.FetchStatus.HttpError => "更新失败（服务器异常，稍后重试）",
+                    ShanbayService.FetchStatus.ParseError => "更新失败（数据解析异常）",
+                    _ => "更新失败（网络不可用）"
+                };
+                ShowToast(msg);
             }
         }
         catch (Exception ex)

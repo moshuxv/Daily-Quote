@@ -7,7 +7,7 @@
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         ResizeMode="CanResize"
-        Icon="Assets/app.ico"
+        Icon="pack://application:,,,/拾句;component/assets/app.ico"
         Background="{DynamicResource BgBrush}"
         FontFamily="Microsoft YaHei UI, Segoe UI"
         TextOptions.TextFormattingMode="Display"

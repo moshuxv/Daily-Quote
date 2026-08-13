@@ -11,13 +11,19 @@ namespace 每日一句.Services;
 /// </summary>
 public static class ShanbayService
 {
-    /// <summary>10s 超时：默认 100s，遇到网络黑洞时会让"手动更新"假死。</summary>
+    /// <summary>单次请求超时：15s（原 10s 偏短，弱网/首包慢时易被误判为"网络不可用"）。</summary>
     private static readonly HttpClient Http = new()
     {
-        Timeout = TimeSpan.FromSeconds(10)
+        Timeout = TimeSpan.FromSeconds(15)
     };
 
+    /// <summary>失败重试次数（不含首次），弱网偶发抖动时避免直接报"网络不可用"。</summary>
+    private const int MaxRetries = 1;
+
     private const string ApiUrl = "https://apiv3.shanbay.com/weapps/dailyquote/quote/";
+
+    /// <summary>抓取结果状态：用于把"网络不可用"等模糊提示细分为具体原因。</summary>
+    public enum FetchStatus { Ok, NetworkError, HttpError, ParseError }
 
     /// <summary>在 API 基址后拼上当天日期参数，扇贝按 date 返回当日句。</summary>
     private static string BuildUrl() => $"{ApiUrl}?date={DateTime.Now:yyyy-MM-dd}";
@@ -37,39 +43,61 @@ public static class ShanbayService
         }
     }
 
-    /// <summary>抓取当日句；任何异常/非 2xx/缺英文正文均返回 null，不抛异常。</summary>
-    public static async Task<Quote?> FetchTodayAsync()
+    /// <summary>
+    /// 抓取当日句：带重试与超时；返回 (Quote, 状态)。
+    /// 任何不可恢复失败都优雅降级为 (null, 对应状态)，不抛异常；调用方据状态给出准确提示。
+    /// </summary>
+    public static async Task<(Quote? Quote, FetchStatus Status)> FetchTodayAsync()
     {
-        try
+        for (int attempt = 0; attempt <= MaxRetries; attempt++)
         {
-            using var resp = await Http.GetAsync(BuildUrl()).ConfigureAwait(false);
-            if (!resp.IsSuccessStatusCode) return null;
-
-            var body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
-            using var doc = JsonDocument.Parse(body);
-            var root = doc.RootElement;
-            if (root.ValueKind != JsonValueKind.Object) return null;
-
-            // API 实际字段为 content；english 作为兜底兼容旧/异常响应
-            var english = ExtractText(root, "content");
-            if (string.IsNullOrWhiteSpace(english)) english = ExtractText(root, "english");
-            if (string.IsNullOrWhiteSpace(english)) return null;
-
-            return new Quote
+            try
             {
-                English = english,
-                Chinese = ExtractText(root, "translation"),
-                Author = ExtractAuthor(root),
-                Date = DateTime.Now.ToString("yyyy-MM-dd"),
-                FetchedAt = DateTime.Now
-            };
+                using var resp = await Http.GetAsync(BuildUrl()).ConfigureAwait(false);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    // 5xx 服务端瞬时错误可重试；4xx（含 429）属客户端/限流问题，不再重试
+                    bool serverErr = (int)resp.StatusCode >= 500;
+                    if (attempt < MaxRetries && serverErr)
+                    {
+                        await Task.Delay(800).ConfigureAwait(false);
+                        continue;
+                    }
+                    return (null, FetchStatus.HttpError);
+                }
+
+                var body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                using var doc = JsonDocument.Parse(body);
+                var root = doc.RootElement;
+                if (root.ValueKind != JsonValueKind.Object) return (null, FetchStatus.ParseError);
+
+                // API 实际字段为 content；english 作为兜底兼容旧/异常响应
+                var english = ExtractText(root, "content");
+                if (string.IsNullOrWhiteSpace(english)) english = ExtractText(root, "english");
+                if (string.IsNullOrWhiteSpace(english)) return (null, FetchStatus.ParseError);
+
+                return (new Quote
+                {
+                    English = english,
+                    Chinese = ExtractText(root, "translation"),
+                    Author = ExtractAuthor(root),
+                    Date = DateTime.Now.ToString("yyyy-MM-dd"),
+                    FetchedAt = DateTime.Now
+                }, FetchStatus.Ok);
+            }
+            catch (Exception ex)
+            {
+                // TaskCanceledException（超时）也归为网络类错误；其余异常同理
+                App.LogWarn(ex);
+                if (attempt < MaxRetries)
+                {
+                    await Task.Delay(800).ConfigureAwait(false);
+                    continue;
+                }
+                return (null, FetchStatus.NetworkError);
+            }
         }
-        catch (Exception ex)
-        {
-            // 网络/解析失败一律优雅返回 null，只留日志
-            App.LogWarn(ex);
-            return null;
-        }
+        return (null, FetchStatus.NetworkError);
     }
 
     /// <summary>从 JSON 对象取指定属性文本，属性可能为 string 或 dict。</summary>

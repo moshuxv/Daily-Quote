@@ -16,15 +16,54 @@ public partial class App : Application
     public static AppSettings CurrentSettings { get; set; } = new();
     public static Quote CurrentQuote { get; set; } = new();
 
-    /// <summary>数据目录：%APPDATA%/拾句</summary>
+    /// <summary>
+    /// 首选数据目录：程序安装目录（exe 同目录）。默认装到 %LOCALAPPDATA%\Programs\拾句（用户可写），
+    /// 符合"设置随安装位置"的预期。
+    /// </summary>
     public static string DataDir { get; } =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "拾句");
+        Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
+
+    /// <summary>
+    /// 真正用于读写的数据目录：优先安装目录；若该目录不可写（如装到 Program Files 等受保护位置），
+    /// 自动回退到用户始终可写的 %LOCALAPPDATA%\拾句，保证"保存设置 / 更新语料 / 写日志"永不因权限失败。
+    /// 回退仅在安装目录不可写时才发生；默认装到 %LOCALAPPDATA%\Programs\拾句 时安装目录本身可写，
+    /// 数据仍留在安装目录，满足"设置随安装位置"的预期。
+    /// </summary>
+    private static string? _writableDataDir;
+    public static string WritableDataDir
+    {
+        get
+        {
+            if (_writableDataDir is not null) return _writableDataDir;
+            _writableDataDir = IsDirWritable(DataDir)
+                ? DataDir
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "拾句");
+            return _writableDataDir;
+        }
+    }
+
+    /// <summary>探测目录是否可写：不存在先尝试创建，存在则写一个临时文件并删除；任一失败即不可写。</summary>
+    private static bool IsDirWritable(string dir)
+    {
+        try
+        {
+            Directory.CreateDirectory(dir);
+            string probe = Path.Combine(dir, ".w_" + Guid.NewGuid().ToString("N") + ".tmp");
+            File.WriteAllBytes(probe, new byte[] { 0 });
+            File.Delete(probe);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     /// <summary>数据文件：data.json（仅语料：今日句 + 语料库）</summary>
-    public static string DataFile => Path.Combine(DataDir, "data.json");
+    public static string DataFile => Path.Combine(WritableDataDir, "data.json");
 
     /// <summary>设置文件：settings.json（仅设置状态，与语料文件分离，保存设置时不再重写整个语料）</summary>
-    public static string SettingsFile => Path.Combine(DataDir, "settings.json");
+    public static string SettingsFile => Path.Combine(WritableDataDir, "settings.json");
 
     private Mutex? _mutex;
     private bool _ownsMutex;
@@ -37,18 +76,28 @@ public partial class App : Application
     private System.Timers.Timer? _dailyTimer;
 
     /// <summary>
-    /// 改名一次性迁移：把旧数据目录 %APPDATA%/每日一句 整体搬至 拾句。
-    /// 仅当新目录不存在时才移动，绝不删除旧数据（旧目录已存在时保持不动，避免误删）。
+    /// 一次性迁移：把旧数据（%APPDATA%/每日一句 改名前，或 %APPDATA%/拾句 上一版）的
+    /// settings.json / data.json 复制到当前数据目录（可写目录 WritableDataDir），避免升级后设置/位置记忆丢失。
+    /// 仅当目标文件不存在时才复制，绝不删除旧数据（安全）。
     /// </summary>
     private static void MigrateLegacyDataDir()
     {
         try
         {
-            string legacy = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "每日一句");
-            if (Directory.Exists(legacy) && !Directory.Exists(DataDir))
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string[] sources = { Path.Combine(appData, "每日一句"), Path.Combine(appData, "拾句") };
+            foreach (var src in sources)
             {
-                Directory.Move(legacy, DataDir);
+                if (!Directory.Exists(src)) continue;
+                foreach (var name in new[] { "settings.json", "data.json" })
+                {
+                    var from = Path.Combine(src, name);
+                    var to = Path.Combine(WritableDataDir, name);
+                    if (File.Exists(from) && !File.Exists(to))
+                    {
+                        File.Copy(from, to);
+                    }
+                }
             }
         }
         catch
@@ -72,7 +121,7 @@ public partial class App : Application
 
         base.OnStartup(e);
 
-        // 改名迁移：把旧数据目录 %APPDATA%/每日一句 搬到 拾句，避免用户设置/位置记忆丢失
+        // 旧数据迁移：把 %APPDATA% 下的设置/语料复制到安装目录（DataDir），避免升级后丢失
         MigrateLegacyDataDir();
 
         // async void：任何逸出的异常都会直接终结进程，故整体兜底
@@ -88,7 +137,7 @@ public partial class App : Application
             }
 
             // 确保数据目录存在
-            try { Directory.CreateDirectory(DataDir); } catch (Exception ex) { LogWarn(ex); }
+            try { Directory.CreateDirectory(WritableDataDir); } catch (Exception ex) { LogWarn(ex); }
 
             // 加载设置 + 今日句（失败静默，保留默认值）
             try { CurrentSettings = await SettingsService.LoadAsync(); } catch (Exception ex) { LogWarn(ex); }
@@ -251,14 +300,14 @@ public partial class App : Application
     /// </summary>
     internal static void LogWarn(Exception? ex) => WriteLog("WARN", ex);
 
-    /// <summary>写入 %APPDATA%/拾句/crash.log（追加）。</summary>
+    /// <summary>写入 数据目录/crash.log（可写目录 WritableDataDir，追加）。</summary>
     private static void WriteLog(string level, Exception? ex)
     {
         try
         {
-            Directory.CreateDirectory(DataDir);
+            Directory.CreateDirectory(WritableDataDir);
             var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}][{level}] {ex?.GetType().FullName}: {ex?.Message}\n{ex?.StackTrace}\n";
-            File.AppendAllText(Path.Combine(DataDir, "crash.log"), line);
+            File.AppendAllText(Path.Combine(WritableDataDir, "crash.log"), line);
         }
         catch { }
     }
